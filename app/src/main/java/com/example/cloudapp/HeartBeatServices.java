@@ -26,11 +26,11 @@ public class HeartBeatServices extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.d("HeartBeatServices", "start");
-
+        String hmac = intent.getStringExtra("hmac");
         final FirebaseDatabase database = FirebaseDatabase.getInstance();
-        final DatabaseReference myConnectionsRef = database.getReference("/deviceStatus/74ddbb7e199ffc9f9053575d044d27fc662c4540/status");
-        final DatabaseReference deviceRef = database.getReference("/deviceStatus/74ddbb7e199ffc9f9053575d044d27fc662c4540");
-        final DatabaseReference lastOnlineRef = database.getReference("/deviceStatus/74ddbb7e199ffc9f9053575d044d27fc662c4540/lastSeen");
+        final DatabaseReference myConnectionsRef = database.getReference("/deviceStatus/"+hmac+"/status");
+        final DatabaseReference deviceRef = database.getReference("/deviceStatus/"+hmac);
+        final DatabaseReference lastOnlineRef = database.getReference("/deviceStatus/"+hmac+"/lastSeen");
         final DatabaseReference connectedRef = database.getReference(".info/connected");
         deviceRef.keepSynced(true);
         connectedRef.addValueEventListener(new ValueEventListener() {
@@ -63,6 +63,8 @@ public class HeartBeatServices extends Service {
                 Log.w("HeartBeatServices", "Listener was cancelled at .info/connected");
             }
         });
+
+
         return START_STICKY;
     }
 }
