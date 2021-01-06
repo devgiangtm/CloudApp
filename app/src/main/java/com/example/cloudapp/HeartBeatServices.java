@@ -106,8 +106,10 @@ public class HeartBeatServices extends Service {
                             updateConfigCommand(command);
                             break;
                         case SHUTDOWN:
+                            shutdown(command);
                             break;
                         case RESTART:
+                            restart(command);
                             break;
                     }
                 }
@@ -121,6 +123,40 @@ public class HeartBeatServices extends Service {
 
 
         return START_STICKY;
+    }
+
+    private void shutdown(Command command){
+        try {
+            PreparedQuery<Command> preparedQuery = commandDAO.queryBuilder().where().eq("createdAt", command.getCreatedAt()).prepare();
+            List<Command> commandList = commandDAO.query(preparedQuery);
+            if (commandList.size() == 0) {
+                commandDAO.create(command);
+                //todo: get config from devices
+                if(deviceCommandResult != null){
+                    deviceCommandResult.child("result").setValue("Shutdown success");
+                }
+                Utils.shutdownDevice();
+            }
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        }
+    }
+
+    private void restart(Command command){
+        try {
+            PreparedQuery<Command> preparedQuery = commandDAO.queryBuilder().where().eq("createdAt", command.getCreatedAt()).prepare();
+            List<Command> commandList = commandDAO.query(preparedQuery);
+            if (commandList.size() == 0) {
+                commandDAO.create(command);
+                //todo: get config from devices
+                if(deviceCommandResult != null){
+                    deviceCommandResult.child("result").setValue("Restart success");
+                }
+                Utils.restartDevice();
+            }
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        }
     }
 
     private void updateConfigCommand(Command command) {
