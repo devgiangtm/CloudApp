@@ -21,6 +21,7 @@
         </activity>
         <activity android:name=".MainActivity"/>
         <service android:name=".HeartBeatServices"/>
+        <service android:name=".syncmanual.SyncManualService"/>
     </application>
 
 </manifest>

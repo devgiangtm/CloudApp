@@ -12,11 +12,18 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.example.cloudapp.DAOManager;
+import com.example.cloudapp.DatabaseHelper;
 import com.example.cloudapp.HeartBeatServices;
 import com.example.cloudapp.R;
+import com.example.cloudapp.SharedPreferencesController;
 import com.example.cloudapp.Utils;
+import com.example.cloudapp.syncmanual.SyncManualService;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.gson.Gson;
+import com.j256.ormlite.android.AndroidConnectionSource;
+import com.j256.ormlite.dao.Dao;
+import com.j256.ormlite.dao.DaoManager;
 
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.codec.binary.Hex;
@@ -27,6 +34,7 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.security.GeneralSecurityException;
 import java.security.SignatureException;
+import java.sql.SQLException;
 import java.util.Objects;
 
 import javax.crypto.Mac;
@@ -41,10 +49,11 @@ import okhttp3.Response;
 
 
 public class RegisterActivity extends AppCompatActivity {
-    private static final String REGISTER_URL = "";
+    private static final String REGISTER_URL = "http://40.91.97.51:8080/api/client/register";
     Button btnRegister;
     Button btnRevoke;
     EditText etApiKey;
+    DatabaseHelper databaseHelper;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -83,41 +92,38 @@ public class RegisterActivity extends AppCompatActivity {
                 }).start();
             }
         });
+        startService(new Intent(this, SyncManualService.class));
+        String uuid = SharedPreferencesController.with(getBaseContext()).getString("uuid");
+        int tenantid = SharedPreferencesController.with(getBaseContext()).getInt("tenantid");
+        if(uuid != null && tenantid != -1){
+            Intent intent = new Intent(this, HeartBeatServices.class);
+            intent.putExtra("uuid",uuid);
+            intent.putExtra("tenantid",tenantid);
+            startService(intent);
+        }
     }
 
-//    private static String computeSignature(String baseString, String keyString) throws GeneralSecurityException, UnsupportedEncodingException {
-//
-//        SecretKey secretKey = null;
-//
-//        byte[] keyBytes = keyString.getBytes();
-//        secretKey = new SecretKeySpec(keyBytes, "HmacSHA1");
-//
-//        Mac mac = Mac.getInstance("HmacSHA1");
-////
-////        mac.init(secretKey);
-////
-////        byte[] text = baseString.getBytes();
-//        try {
-//            SecretKeySpec signingKey = new SecretKeySpec(keyString.getBytes(), HMAC_SHA1_ALGORITHM);
-//            Mac mac = Mac.getInstance(HMAC_SHA1_ALGORITHM);
-//            mac.init(signingKey);
-//            byte[] rawHmac = mac.doFinal(rawMacAddress.getBytes());
-//            result = new String(Base64.encode(rawHmac));
-//        } catch (Exception e) {
-//            throw new SignatureException("Failed to generate HMAC : " + e.getMessage());
-//        }
-//
-//        return new String(Base64.encodeBase64(mac.doFinal(text))).trim();
-//    }
+    private static String generateHashedMac(String hashKey, String rawMacAddress) throws SignatureException {
+        final String HMAC_SHA1_ALGORITHM = "HmacSHA1";
+        String result;
+        try {
+            SecretKeySpec signingKey = new SecretKeySpec(hashKey.getBytes(), HMAC_SHA1_ALGORITHM);
+            Mac mac = Mac.getInstance(HMAC_SHA1_ALGORITHM);
+            mac.init(signingKey);
+            byte[] rawHmac = mac.doFinal(rawMacAddress.getBytes());
+            result = new String(org.apache.commons.codec.binary.Base64.encodeBase64(rawHmac));
+        } catch (Exception e) {
+            throw new SignatureException("Failed to generate HMAC : " + e.getMessage());
+        }
+        return result;
+    }
 
     private void registerDevice(String apikey) {
         try {
             RegisterInfo registerInfo = new RegisterInfo();
             registerInfo.setIpAddress(Utils.getIPAddress(true));
             registerInfo.setMacAddress(Utils.getMacAddr());
-            HmacUtils mac = new HmacUtils(HmacAlgorithms.HMAC_SHA_1, apikey);
-            String hmacSHA1Result = String.valueOf(Hex.encodeHex(mac.hmac(Utils.getMacAddr())));
-            registerInfo.setHashingMac(hmacSHA1Result);
+            registerInfo.setHashingMac(generateHashedMac(apikey,Utils.getMacAddr()));
             String postResult = post(REGISTER_URL, apikey, new Gson().toJson(registerInfo));
             ResponseObj responseObj = new Gson().fromJson(postResult, ResponseObj.class);
             switch (responseObj.getStatus()) {
@@ -127,12 +133,16 @@ public class RegisterActivity extends AppCompatActivity {
                     break;
                 case 201: //Register successfully
                     Intent intent = new Intent(this, HeartBeatServices.class);
-                    intent.putExtra("hmac",registerInfo.getHashingMac());
+                    intent.putExtra("uuid",responseObj.getLocationKey());
+                    intent.putExtra("tenantid",responseObj.getTenantId());
                     startService(intent);
                     break;
                 case 500: //Undermined Internal Server Error. Pls try again
                     break;
             }
+//            Intent intent = new Intent(this, HeartBeatServices.class);
+//            intent.putExtra("hmac",registerInfo.getHashingMac());
+//            startService(intent);
 
 
         } catch (Exception e) {
@@ -154,18 +164,4 @@ public class RegisterActivity extends AppCompatActivity {
             return response.body().string();
         }
     }
-//    private String generateHashedMac(String hashKey, String rawMacAddress) throws SignatureException {
-//        final String HMAC_SHA1_ALGORITHM = "HmacSHA1";
-//        String result;
-//        try {
-//            SecretKeySpec signingKey = new SecretKeySpec(hashKey.getBytes(), HMAC_SHA1_ALGORITHM);
-//            Mac mac = Mac.getInstance(HMAC_SHA1_ALGORITHM);
-//            mac.init(signingKey);
-//            byte[] rawHmac = mac.doFinal(rawMacAddress.getBytes());
-//            result = new String(Base64.encode(rawHmac));
-//        } catch (Exception e) {
-//            throw new SignatureException("Failed to generate HMAC : " + e.getMessage());
-//        }
-//        return result;
-//    }
 }
